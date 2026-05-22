@@ -65,7 +65,7 @@ class YouTubeFragment : Fragment() {
 
         binding.btnDownloadAudio.setOnClickListener {
             currentVideoInfo?.let { info ->
-                showQualitySelectionDialog(info.audioStreams, isAudioOnly = true)
+                showAudioQualitySelectionDialog(info.audioStreams, isAudioOnly = true)
             }
         }
 
@@ -194,7 +194,7 @@ class YouTubeFragment : Fragment() {
             .show()
     }
 
-    private fun showQualitySelectionDialog(
+    private fun showAudioQualitySelectionDialog(
         streams: List<AudioStreamInfo>,
         isAudioOnly: Boolean
     ) {
