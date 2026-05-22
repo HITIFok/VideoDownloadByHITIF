@@ -167,7 +167,7 @@ object YouTubeExtractor {
                     if (validatedUrl != null) {
                         videoStreams.add(VideoStreamInfo(
                             url = validatedUrl,
-                            format = stream.format,
+                            format = stream.format?.suffix,
                             resolution = stream.resolution,
                             quality = stream.quality,
                             fileSize = 0L,
@@ -185,7 +185,7 @@ object YouTubeExtractor {
                     if (validatedUrl != null) {
                         audioStreams.add(AudioStreamInfo(
                             url = validatedUrl,
-                            format = stream.format,
+                            format = stream.format?.suffix,
                             quality = stream.averageBitrate.toString() + "kbps",
                             bitrate = stream.averageBitrate,
                             fileSize = 0L
@@ -201,7 +201,7 @@ object YouTubeExtractor {
                     if (validatedUrl != null) {
                         videoOnlyStreams.add(VideoStreamInfo(
                             url = validatedUrl,
-                            format = stream.format,
+                            format = stream.format?.suffix,
                             resolution = stream.resolution,
                             quality = stream.quality,
                             fileSize = 0L,
@@ -698,7 +698,7 @@ object YouTubeExtractor {
 
             val playlistName = extractor.name
             val uploaderName = extractor.uploaderName
-            val thumbnailUrl = extractor.thumbnailUrl
+            val thumbnailUrl: String? = null
 
             val episodes = mutableListOf<SeasonEpisode>()
             var position = 0
