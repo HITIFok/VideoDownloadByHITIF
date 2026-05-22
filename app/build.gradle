@@ -50,6 +50,8 @@ android {
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
+            // Use debug signing if no keystore is configured (e.g., CI environment)
+            if (!hasSigning) signingConfig signingConfigs.debug
         }
         debug {
             minifyEnabled false
