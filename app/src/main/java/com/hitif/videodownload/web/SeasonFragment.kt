@@ -11,6 +11,8 @@ import com.hitif.videodownload.databinding.FragmentSeasonBinding
 import com.hitif.videodownload.download.DownloadManager
 import com.hitif.videodownload.download.DownloadSource
 import com.hitif.videodownload.download.SeasonEpisode
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 class SeasonFragment : Fragment() {
 
@@ -209,9 +211,6 @@ class SeasonFragment : Fragment() {
         }
     }
 }
-
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.launch
 
 class SeasonAdapter(
     private val onEpisodeClick: (SeasonEpisode) -> Unit,
