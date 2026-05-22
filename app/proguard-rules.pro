@@ -26,6 +26,10 @@
 # Keep JSoup
 -keep class org.jsoup.** { *; }
 
+# Fix missing java.beans (Rhino/Jsoup transitive dependency)
+-dontwarn java.beans.**
+-dontwarn org.mozilla.javascript.**
+
 # Keep Media3/ExoPlayer
 -keep class androidx.media3.** { *; }
 
