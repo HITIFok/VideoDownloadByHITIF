@@ -23,17 +23,23 @@ android {
         multiDexEnabled true
     }
 
+    def hasSigning = false
     signingConfigs {
         def ksFile = rootProject.findProperty('android.signingConfigs.release.storeFile')
         def ksPass = rootProject.findProperty('android.signingConfigs.release.storePassword')
         def keyAlias = rootProject.findProperty('android.signingConfigs.release.keyAlias')
         def keyPass = rootProject.findProperty('android.signingConfigs.release.keyPassword')
         if (ksFile && ksPass && keyAlias && keyPass) {
+            hasSigning = true
             release {
                 storeFile file(ksFile.toString())
                 storePassword ksPass.toString()
                 keyAlias keyAlias.toString()
                 keyPassword keyPass.toString()
+            }
+        } else {
+            release {
+                // Fallback for CI without signing secrets
             }
         }
     }
