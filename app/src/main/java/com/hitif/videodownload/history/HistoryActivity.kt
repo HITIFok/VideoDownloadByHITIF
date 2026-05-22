@@ -68,10 +68,10 @@ class HistoryAdapter(
 
     inner class ViewHolder(itemView: android.view.View) : androidx.recyclerview.widget.RecyclerView.ViewHolder(itemView) {
         fun bind(entry: HistoryEntry) {
-            itemView.findViewById<android.widget.TextView>(R.id.textHistoryTitle).text = entry.title ?: entry.url
-            itemView.findViewById<android.widget.TextView>(R.id.textHistoryUrl).text = entry.url
-            itemView.findViewById<android.widget.TextView>(R.id.textHistorySource).text = entry.source
-            itemView.findViewById<android.widget.ImageButton>(R.id.btnDeleteHistory).setOnClickListener { onDelete(entry) }
+            itemView.findViewById<android.widget.TextView>(R.id.text_history_title).text = entry.title ?: entry.url
+            itemView.findViewById<android.widget.TextView>(R.id.text_history_url).text = entry.url
+            itemView.findViewById<android.widget.TextView>(R.id.text_history_source).text = entry.source
+            itemView.findViewById<android.widget.ImageButton>(R.id.btn_delete_history).setOnClickListener { onDelete(entry) }
             itemView.setOnClickListener { onClick(entry) }
         }
     }

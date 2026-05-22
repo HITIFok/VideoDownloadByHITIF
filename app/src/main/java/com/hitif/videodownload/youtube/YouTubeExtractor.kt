@@ -10,12 +10,13 @@ import com.hitif.videodownload.download.SeasonEpisode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.schabi.newpipe.extractor.NewPipe
-import org.schabi.newpipe.extractor.StreamingService
 import org.schabi.newpipe.extractor.exceptions.ExtractionException
-import org.schabi.newpipe.extractor.services.youtube.extractors.YoutubeStreamExtractor
 import org.schabi.newpipe.extractor.stream.*
 import java.net.HttpURLConnection
 import java.net.URL
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.net.URLDecoder
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import java.util.*
@@ -23,9 +24,6 @@ import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
-import kotlin.coroutines.suspendCoroutine
 
 /**
  * YouTube Video Extractor — Enhanced with VidMate's anti-403 techniques
@@ -150,9 +148,9 @@ object YouTubeExtractor {
      */
     suspend fun extractVideoInfo(url: String): YouTubeVideoInfo? = withContext(Dispatchers.IO) {
         try {
-            val service = NewPipe.getService(StreamingService.ServiceId.YouTube)
+            val service = NewPipe.getServiceByUrl(url)
             val urlHandler = service.streamLHFactory.fromUrl(url)
-            val extractor = service.getStreamExtractor(urlHandler) as YoutubeStreamExtractor
+            val extractor = service.getStreamExtractor(urlHandler)
             extractor.fetchPage()
 
             val name = extractor.name
@@ -165,14 +163,14 @@ object YouTubeExtractor {
             val videoStreams = mutableListOf<VideoStreamInfo>()
             extractor.videoStreams?.forEach { stream ->
                 if (stream != null && stream.url?.isNotEmpty() == true) {
-                    val validatedUrl = validateAndFixStreamUrl(stream.url, url)
+                    val validatedUrl = validateAndFixStreamUrl(stream.url ?: "", url)
                     if (validatedUrl != null) {
                         videoStreams.add(VideoStreamInfo(
                             url = validatedUrl,
                             format = stream.format,
                             resolution = stream.resolution,
                             quality = stream.quality,
-                            fileSize = stream.contentLength,
+                            fileSize = 0L,
                             bitrate = stream.bitrate,
                             isVideoOnly = stream.isVideoOnly
                         ))
@@ -183,14 +181,14 @@ object YouTubeExtractor {
             val audioStreams = mutableListOf<AudioStreamInfo>()
             extractor.audioStreams?.forEach { stream ->
                 if (stream != null && stream.url?.isNotEmpty() == true) {
-                    val validatedUrl = validateAndFixStreamUrl(stream.url, url)
+                    val validatedUrl = validateAndFixStreamUrl(stream.url ?: "", url)
                     if (validatedUrl != null) {
                         audioStreams.add(AudioStreamInfo(
                             url = validatedUrl,
                             format = stream.format,
                             quality = stream.averageBitrate.toString() + "kbps",
                             bitrate = stream.averageBitrate,
-                            fileSize = stream.contentLength
+                            fileSize = 0L
                         ))
                     }
                 }
@@ -199,14 +197,14 @@ object YouTubeExtractor {
             val videoOnlyStreams = mutableListOf<VideoStreamInfo>()
             extractor.videoOnlyStreams?.forEach { stream ->
                 if (stream != null && stream.url?.isNotEmpty() == true) {
-                    val validatedUrl = validateAndFixStreamUrl(stream.url, url)
+                    val validatedUrl = validateAndFixStreamUrl(stream.url ?: "", url)
                     if (validatedUrl != null) {
                         videoOnlyStreams.add(VideoStreamInfo(
                             url = validatedUrl,
                             format = stream.format,
                             resolution = stream.resolution,
                             quality = stream.quality,
-                            fileSize = stream.contentLength,
+                            fileSize = 0L,
                             bitrate = stream.bitrate,
                             isVideoOnly = true
                         ))
@@ -555,7 +553,7 @@ object YouTubeExtractor {
                 val innertubeUrl = "https://youtubei.googleapis.com/youtubei/v1/player?key=$apiKey"
 
                 val body = buildInnerTubeRequestBody(videoId, clientVersion)
-                val connection = (URL(innertubeUrl).openConnection() as HttpURLConnection).apply {
+                val connection = (URL(innertubeUrl).openConnection() as HttpsURLConnection).apply {
                     requestMethod = "POST"
                     doOutput = true
                     connectTimeout = 8000
@@ -663,7 +661,7 @@ object YouTubeExtractor {
             val sslContext = SSLContext.getInstance("TLS")
             sslContext.init(null, trustAllCerts, SecureRandom())
             connection.sslSocketFactory = sslContext.socketFactory
-            connection.hostnameVerifier = { _, _ -> true }
+            connection.hostnameVerifier = javax.net.ssl.HostnameVerifier { _, _ -> true }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to configure trust-all certs: ${e.message}")
         }
@@ -678,14 +676,15 @@ object YouTubeExtractor {
     }
 
     private fun parseFormat(mimeType: String): MediaFormat? {
-        return when {
-            mimeType.contains("mp4") -> MediaFormat.MPEG_4
-            mimeType.contains("webm") -> MediaFormat.WEBM
-            mimeType.contains("3gp") -> MediaFormat.v3GPP
-            mimeType.contains("x-flv") -> MediaFormat.FLV
-            mimeType.contains("mkv") -> MediaFormat.MKV
-            else -> null
+        val suffix = when {
+            mimeType.contains("mp4") -> "mp4"
+            mimeType.contains("webm") -> "webm"
+            mimeType.contains("3gp") -> "3gp"
+            mimeType.contains("x-flv") -> "flv"
+            mimeType.contains("mkv") -> "mkv"
+            else -> "mp4"
         }
+        return MediaFormat.getFromSuffix(suffix)
     }
 
     /**
@@ -693,7 +692,7 @@ object YouTubeExtractor {
      */
     suspend fun extractPlaylistInfo(url: String): PlaylistInfo? = withContext(Dispatchers.IO) {
         try {
-            val service = NewPipe.getService(StreamingService.ServiceId.YouTube)
+            val service = NewPipe.getServiceByUrl(url)
             val urlHandler = service.playlistLHFactory.fromUrl(url)
             val extractor = service.getPlaylistExtractor(urlHandler)
             extractor.fetchPage()
@@ -704,12 +703,14 @@ object YouTubeExtractor {
 
             val episodes = mutableListOf<SeasonEpisode>()
             var position = 0
-            for (streamInfo in extractor.streams) {
+            val page = extractor.initialPage
+            for (item in page.items) {
+                val streamItem = item as? org.schabi.newpipe.extractor.stream.StreamInfoItem ?: continue
                 episodes.add(SeasonEpisode(
-                    url = streamInfo.url,
-                    fileName = sanitizeFileName(streamInfo.name) + ".mp4",
-                    title = streamInfo.name,
-                    thumbnailUrl = streamInfo.thumbnails.lastOrNull()?.url,
+                    url = streamItem.url,
+                    fileName = sanitizeFileName(streamItem.name) + ".mp4",
+                    title = streamItem.name,
+                    thumbnailUrl = streamItem.thumbnails.lastOrNull()?.url,
                     sourceSite = "YouTube",
                     resolution = "720p",
                     format = "mp4",
@@ -807,8 +808,8 @@ class DownloaderImpl private constructor() : org.schabi.newpipe.extractor.downlo
         val httpRequest = okhttp3.Request.Builder()
             .url(request.url())
             .apply {
-                request.headers().forEach { (key, value) ->
-                    if (key != "User-Agent") addHeader(key, value)
+                request.headers().forEach { (key, values) ->
+                    if (key != "User-Agent") values.firstOrNull()?.let { addHeader(key, it) }
                 }
             }
             // VidMate technique: Android YouTube app headers
@@ -816,11 +817,14 @@ class DownloaderImpl private constructor() : org.schabi.newpipe.extractor.downlo
             .addHeader("X-Android-Package", "com.google.android.youtube")
             .addHeader("X-Android-Cert", "2FAB0E6B83A5F246F6ACC2E590E5C5892777B3FC")
             .addHeader("Accept-Language", "en-US,en;q=0.8")
-            .method(request.httpMethod(), request.body()?.toRequestBody())
+            .method(request.httpMethod(), request.body()?.let { b ->
+                b.toRequestBody("application/json; charset=UTF-8".toMediaType())
+            })
             .build()
 
         val httpResponse = client.newCall(httpRequest).execute()
-        val responseBody = httpResponse.body?.string() ?: ""
+        val responseStr = httpResponse.body?.string() ?: ""
+        val responseBody = responseStr
 
         if (httpResponse.code == 403) {
             throw org.schabi.newpipe.extractor.exceptions.ReCaptchaException("YouTube returned 403", request.url())
@@ -838,12 +842,7 @@ class DownloaderImpl private constructor() : org.schabi.newpipe.extractor.downlo
         )
     }
 
-    private fun String.toRequestBody(): okhttp3.RequestBody {
-        return okhttp3.RequestBody.create(
-            okhttp3.MediaType.parse("application/json; charset=UTF-8"),
-            this.toByteArray()
-        )
-    }
+
 
     companion object {
         @Volatile private var INSTANCE: DownloaderImpl? = null
@@ -856,4 +855,4 @@ class DownloaderImpl private constructor() : org.schabi.newpipe.extractor.downlo
     }
 }
 
-private fun URLDecoder.decode(s: String, enc: String): String = java.net.URLDecoder.decode(s, enc)
+

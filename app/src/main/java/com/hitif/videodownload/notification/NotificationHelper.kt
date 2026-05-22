@@ -21,6 +21,11 @@ class NotificationHelper(private val context: Context) {
 
         const val DOWNLOAD_SERVICE_NOTIFICATION_ID = 1000
         const val DOWNLOAD_NOTIFICATION_BASE_ID = 2000
+
+        fun updateNotification(context: Context, id: Int, notification: android.app.Notification) {
+            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.notify(id, notification)
+        }
     }
 
     fun showDownloadProgress(entity: DownloadEntity) {
@@ -96,10 +101,4 @@ class NotificationHelper(private val context: Context) {
         )
     }
 
-    companion object {
-        fun updateNotification(context: Context, id: Int, notification: android.app.Notification) {
-            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.notify(id, notification)
-        }
-    }
 }

@@ -360,7 +360,7 @@ object WebVideoExtractor {
         return null
     }
 
-    private fun extractGeneric(url: String, userAgent: String): ExtractedVideo? {
+    private suspend fun extractGeneric(url: String, userAgent: String): ExtractedVideo? {
         try {
             val doc = Jsoup.connect(url)
                 .userAgent(userAgent)

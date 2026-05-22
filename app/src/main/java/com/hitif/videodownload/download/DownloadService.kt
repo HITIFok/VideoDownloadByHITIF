@@ -33,7 +33,7 @@ class DownloadService : LifecycleService() {
                 action = ACTION_START_DOWNLOAD
                 putExtra(EXTRA_DOWNLOAD_ID, downloadId)
             }
-            startForegroundService(context, intent)
+            context.startForegroundService(intent)
         }
 
         fun pauseDownload(context: Context, downloadId: Long) {
@@ -41,7 +41,7 @@ class DownloadService : LifecycleService() {
                 action = ACTION_PAUSE_DOWNLOAD
                 putExtra(EXTRA_DOWNLOAD_ID, downloadId)
             }
-            startForegroundService(context, intent)
+            context.startForegroundService(intent)
         }
 
         fun resumeDownload(context: Context, downloadId: Long) {
@@ -49,7 +49,7 @@ class DownloadService : LifecycleService() {
                 action = ACTION_RESUME_DOWNLOAD
                 putExtra(EXTRA_DOWNLOAD_ID, downloadId)
             }
-            startForegroundService(context, intent)
+            context.startForegroundService(intent)
         }
 
         fun cancelDownload(context: Context, downloadId: Long) {
@@ -57,7 +57,7 @@ class DownloadService : LifecycleService() {
                 action = ACTION_CANCEL_DOWNLOAD
                 putExtra(EXTRA_DOWNLOAD_ID, downloadId)
             }
-            startForegroundService(context, intent)
+            context.startForegroundService(intent)
         }
     }
 

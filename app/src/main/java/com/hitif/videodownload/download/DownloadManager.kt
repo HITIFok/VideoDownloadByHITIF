@@ -2,6 +2,7 @@ package com.hitif.videodownload.download
 
 import android.content.Context
 import android.os.Environment
+import android.util.Log
 import com.hitif.videodownload.R
 import com.hitif.videodownload.notification.NotificationHelper
 import kotlinx.coroutines.*
@@ -15,6 +16,7 @@ import java.net.URL
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.*
 
@@ -66,6 +68,8 @@ class DownloadManager private constructor(private val context: Context) {
 
         // VidMate's max retry count
         private const val MAX_RETRY_403 = 5
+
+        const val TAG = "DownloadManager"
     }
 
     /**
@@ -76,21 +80,18 @@ class DownloadManager private constructor(private val context: Context) {
         // VidMate's TLS cipher downgrade (from aamb/aaab.java)
         val modernTls = ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
             .cipherSuites(
-                listOf(
-                    // VidMate replaces AES-GCM with AES-CBC for compatibility
-                    CipherSuite.TLS_RSA_WITH_AES_128_CBC_SHA,
-                    CipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA,
-                    CipherSuite.TLS_RSA_WITH_AES_128_GCM_SHA256,
-                    CipherSuite.TLS_RSA_WITH_AES_256_GCM_SHA384,
-                    CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-                    CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-                    CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-                    CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-                    CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-                    CipherSuite.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-                    CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-                    CipherSuite.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
-                )
+                CipherSuite.TLS_RSA_WITH_AES_128_CBC_SHA,
+                CipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA,
+                CipherSuite.TLS_RSA_WITH_AES_128_GCM_SHA256,
+                CipherSuite.TLS_RSA_WITH_AES_256_GCM_SHA384,
+                CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
+                CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+                CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+                CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+                CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+                CipherSuite.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+                CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+                CipherSuite.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
             )
             .build()
 
@@ -183,7 +184,6 @@ class DownloadManager private constructor(private val context: Context) {
         withContext(Dispatchers.IO) {
             try {
                 dao.updateStatus(entity.id, DownloadStatus.CONNECTING)
-                _activeDownloadsCount.value = dao.getActiveCount()
                 notificationHelper.showDownloadProgress(entity)
 
                 val outputDir = getOutputDirectory(entity.source)
@@ -247,8 +247,6 @@ class DownloadManager private constructor(private val context: Context) {
             } catch (e: Exception) {
                 dao.updateFailed(entity.id, DownloadStatus.FAILED, e.message ?: "Unknown error")
                 notificationHelper.showDownloadError(entity, e.message ?: "Unknown error")
-            } finally {
-                _activeDownloadsCount.value = dao.getActiveCount()
             }
         }
     }
@@ -437,13 +435,10 @@ class DownloadManager private constructor(private val context: Context) {
         }
 
         override fun loadForRequest(url: HttpUrl): List<Cookie> {
-            return cookies[url.host]?.filter { it.matches(url) } ?: emptyList()
+            return cookies[url.host]?.filter { cookie -> cookie.matches(url) } ?: emptyList()
         }
     }
 
-    private companion object {
-        const val TAG = "DownloadManager"
-    }
 }
 
 data class SeasonEpisode(

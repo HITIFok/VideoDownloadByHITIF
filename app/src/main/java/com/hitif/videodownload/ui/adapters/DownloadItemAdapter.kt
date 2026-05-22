@@ -35,14 +35,14 @@ class DownloadItemAdapter(
     }
 
     inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        private val textTitle: TextView = itemView.findViewById(R.id.textDownloadTitle)
-        private val textInfo: TextView = itemView.findViewById(R.id.textDownloadInfo)
-        private val textProgress: TextView = itemView.findViewById(R.id.textDownloadProgress)
-        private val textSpeed: TextView = itemView.findViewById(R.id.textDownloadSpeed)
-        private val progressBar: android.widget.ProgressBar = itemView.findViewById(R.id.progressBar)
-        private val btnAction: ImageView = itemView.findViewById(R.id.btnAction)
-        private val textSourceBadge: TextView = itemView.findViewById(R.id.textSourceBadge)
-        private val textEpisodeBadge: TextView = itemView.findViewById(R.id.textEpisodeBadge)
+        private val textTitle: TextView = itemView.findViewById(R.id.text_download_title)
+        private val textInfo: TextView = itemView.findViewById(R.id.text_download_info)
+        private val textProgress: TextView = itemView.findViewById(R.id.text_download_progress)
+        private val textSpeed: TextView = itemView.findViewById(R.id.text_download_speed)
+        private val progressBar: android.widget.ProgressBar = itemView.findViewById(R.id.progress_bar)
+        private val btnAction: ImageView = itemView.findViewById(R.id.btn_action)
+        private val textSourceBadge: TextView = itemView.findViewById(R.id.text_source_badge)
+        private val textEpisodeBadge: TextView = itemView.findViewById(R.id.text_episode_badge)
 
         fun bind(item: DownloadEntity) {
             textTitle.text = item.title ?: item.fileName

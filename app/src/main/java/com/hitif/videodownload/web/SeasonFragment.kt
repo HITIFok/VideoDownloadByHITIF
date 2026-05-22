@@ -146,7 +146,7 @@ class SeasonFragment : Fragment() {
 
     private fun showEpisodeOptions(episode: SeasonEpisode) {
         com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
-            .setTitle(episode.title ?: episode.episodeLabel)
+            .setTitle(episode.title ?: "E${episode.episodeNumber ?: "?"}")
             .setItems(arrayOf(getString(R.string.download), getString(R.string.remove))) { _, which ->
                 when (which) {
                     0 -> downloadEpisode(episode)
@@ -229,13 +229,13 @@ class SeasonAdapter(
 
     inner class EpisodeViewHolder(itemView: View) : androidx.recyclerview.widget.RecyclerView.ViewHolder(itemView) {
         fun bind(episode: SeasonEpisode) {
-            itemView.findViewById<android.widget.TextView>(R.id.textEpisodeTitle).text =
+            itemView.findViewById<android.widget.TextView>(R.id.text_episode_title).text =
                 episode.title ?: "Episode ${episode.episodeNumber ?: "?"}"
-            itemView.findViewById<android.widget.TextView>(R.id.textEpisodeLabel).text =
-                episode.episodeLabel.ifEmpty { "E${episode.episodeNumber ?: "?"}" }
-            itemView.findViewById<android.widget.TextView>(R.id.textEpisodeSource).text =
+            itemView.findViewById<android.widget.TextView>(R.id.text_episode_label).text =
+                "E${episode.episodeNumber ?: "?"}"
+            itemView.findViewById<android.widget.TextView>(R.id.text_episode_source).text =
                 episode.sourceSite ?: "Web"
-            itemView.findViewById<android.widget.ImageButton>(R.id.btnDownloadEpisode).setOnClickListener {
+            itemView.findViewById<android.widget.ImageButton>(R.id.btn_download_episode).setOnClickListener {
                 onEpisodeDownloadClick(episode)
             }
             itemView.setOnClickListener { onEpisodeClick(episode) }

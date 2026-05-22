@@ -91,22 +91,14 @@ data class DownloadsTab(
 
 // Extension function to convert LiveData to StateFlow
 fun <T> androidx.lifecycle.LiveData<T>.toStateFlow(
-    scope: androidx.lifecycle.ViewModelScope,
+    scope: kotlinx.coroutines.CoroutineScope,
     initial: T
 ): kotlinx.coroutines.flow.StateFlow<T> {
     return kotlinx.coroutines.flow.MutableStateFlow(initial).also { stateFlow ->
-        scope.launch {
-            kotlinx.coroutines.flow.conflate().let { flow ->
-                withContext(kotlinx.coroutines.Dispatchers.Main) {
-                    observeForever { value ->
-                        stateFlow.value = value
-                    }
-                }
+        scope.launch(kotlinx.coroutines.Dispatchers.Main) {
+            observeForever { value ->
+                stateFlow.value = value
             }
         }
     }.asStateFlow()
-}
-
-private suspend fun withContext(dispatcher: kotlinx.coroutines.CoroutineDispatcher, block: suspend () -> Unit) {
-    kotlinx.coroutines.withContext(dispatcher, block)
 }

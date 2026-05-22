@@ -114,8 +114,12 @@ class YouTubeFragment : Fragment() {
         lifecycleScope.launch {
             try {
                 val info = YouTubeExtractor.extractVideoInfo(url)
-                currentVideoInfo = info
-                showVideoInfo(info)
+                if (info != null) {
+                    currentVideoInfo = info
+                    showVideoInfo(info)
+                } else {
+                    showError(getString(R.string.extraction_failed))
+                }
             } catch (e: YouTubeExtractionException) {
                 showError(e.message ?: getString(R.string.extraction_failed))
             } catch (e: Exception) {
@@ -149,7 +153,7 @@ class YouTubeFragment : Fragment() {
                 try {
                     val drawable = coil.request.ImageRequest.Builder(requireContext())
                         .data(thumbUrl)
-                        .target { binding.imageThumbnail.setImageBitmap(it) }
+                        .target { drawable -> binding.imageThumbnail.setImageDrawable(drawable) }
                         .build()
                     coil.ImageLoader(requireContext()).enqueue(drawable)
                 } catch (e: Exception) {
@@ -177,7 +181,7 @@ class YouTubeFragment : Fragment() {
         val labels = sortedStreams.map { stream ->
             when {
                 isAudioOnly -> "${stream.quality} (${formatFileSize(stream.fileSize)})"
-                else -> "${stream.resolution ?: "?"} ${stream.format?.suffix ?: ""} (${formatFileSize(stream.fileSize)})"
+                else -> "${stream.resolution ?: "?"} (${formatFileSize(stream.fileSize)})"
             }
         }.toTypedArray()
 
@@ -219,7 +223,7 @@ class YouTubeFragment : Fragment() {
 
         lifecycleScope.launch {
             val downloadManager = DownloadManager.getInstance(requireContext())
-            val extension = stream.format?.suffix ?: "mp4"
+            val extension = if (stream.format?.name?.contains("webm") == true) "webm" else "mp4"
             val fileName = sanitizeFileName("${info.title} [${stream.resolution}].$extension")
 
             downloadManager.addDownload(
@@ -249,7 +253,7 @@ class YouTubeFragment : Fragment() {
 
         lifecycleScope.launch {
             val downloadManager = DownloadManager.getInstance(requireContext())
-            val extension = stream.format?.suffix ?: "m4a"
+            val extension = if (stream.format?.name?.contains("webm") == true) "webm" else "m4a"
             val fileName = sanitizeFileName("${info.title} [${stream.quality}].$extension")
 
             downloadManager.addDownload(

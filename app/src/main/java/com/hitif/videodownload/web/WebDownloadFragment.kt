@@ -74,7 +74,7 @@ class WebDownloadFragment : Fragment() {
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
-                super.onPageFinished(view, url, favicon)
+                super.onPageFinished(view, url)
                 binding.progressBar.visibility = View.GONE
                 updateVideoCountBadge()
             }
