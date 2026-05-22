@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/navigation_web"
+        android:icon="@drawable/ic_web"
+        android:title="@string/tab_web" />
+
+    <item
+        android:id="@+id/navigation_youtube"
+        android:icon="@drawable/ic_youtube"
+        android:title="@string/tab_youtube" />
+
+    <item
+        android:id="@+id/navigation_season"
+        android:icon="@drawable/ic_season"
+        android:title="@string/tab_season" />
+
+    <item
+        android:id="@+id/navigation_downloads"
+        android:icon="@drawable/ic_downloads"
+        android:title="@string/tab_downloads" />
+
+</menu>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/navigation_web">
+
+    <fragment
+        android:id="@+id/navigation_web"
+        android:name="com.hitif.videodownload.web.WebDownloadFragment"
+        android:label="@string/tab_web" />
+
+    <fragment
+        android:id="@+id/navigation_youtube"
+        android:name="com.hitif.videodownload.youtube.YouTubeFragment"
+        android:label="@string/tab_youtube" />
+
+    <fragment
+        android:id="@+id/navigation_season"
+        android:name="com.hitif.videodownload.web.SeasonFragment"
+        android:label="@string/tab_season" />
+
+    <fragment
+        android:id="@+id/navigation_downloads"
+        android:name="com.hitif.videodownload.ui.fragments.DownloadsFragment"
+        android:label="@string/tab_downloads" />
+
+</navigation>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/action_play" android:title="@string/play" />
+    <item android:id="@+id/action_pause" android:title="@string/pause" />
+    <item android:id="@+id/action_resume" android:title="@string/resume" />
+    <item android:id="@+id/action_retry" android:title="@string/retry" />
+    <item android:id="@+id/action_delete" android:title="@string/delete" />
+</menu>

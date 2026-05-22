@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="downloads_active">
+        <item quantity="one">%1$d téléchargement en cours</item>
+        <item quantity="other">%1$d téléchargements en cours</item>
+    </plurals>
+</resources>
