@@ -6,6 +6,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.hitif.videodownload.R
 import com.hitif.videodownload.databinding.ActivityHistoryBinding
+import kotlinx.coroutines.launch
 
 class HistoryActivity : AppCompatActivity() {
 

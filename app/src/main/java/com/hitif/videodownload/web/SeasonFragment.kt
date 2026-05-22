@@ -206,7 +206,7 @@ class SeasonFragment : Fragment() {
     }
 
     private fun launch(block: suspend () -> Unit) {
-        androidx.lifecycle.lifecycleScope.launchWhenStarted {
+        lifecycleScope.launchWhenStarted {
             block()
         }
     }

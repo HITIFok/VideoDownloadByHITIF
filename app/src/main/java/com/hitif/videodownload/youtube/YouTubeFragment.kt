@@ -223,7 +223,7 @@ class YouTubeFragment : Fragment() {
 
         lifecycleScope.launch {
             val downloadManager = DownloadManager.getInstance(requireContext())
-            val extension = if (stream.format?.name?.contains("webm") == true) "webm" else "mp4"
+            val extension = if (stream.format?.contains("webm") == true) "webm" else "mp4"
             val fileName = sanitizeFileName("${info.title} [${stream.resolution}].$extension")
 
             downloadManager.addDownload(
@@ -253,7 +253,7 @@ class YouTubeFragment : Fragment() {
 
         lifecycleScope.launch {
             val downloadManager = DownloadManager.getInstance(requireContext())
-            val extension = if (stream.format?.name?.contains("webm") == true) "webm" else "m4a"
+            val extension = if (stream.format?.contains("webm") == true) "webm" else "m4a"
             val fileName = sanitizeFileName("${info.title} [${stream.quality}].$extension")
 
             downloadManager.addDownload(

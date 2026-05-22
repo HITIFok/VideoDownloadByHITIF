@@ -675,8 +675,8 @@ object YouTubeExtractor {
             .replace("\\u0026amp;", "&")
     }
 
-    private fun parseFormat(mimeType: String): MediaFormat? {
-        val suffix = when {
+    private fun parseFormat(mimeType: String): String? {
+        return when {
             mimeType.contains("mp4") -> "mp4"
             mimeType.contains("webm") -> "webm"
             mimeType.contains("3gp") -> "3gp"
@@ -684,7 +684,6 @@ object YouTubeExtractor {
             mimeType.contains("mkv") -> "mkv"
             else -> "mp4"
         }
-        return MediaFormat.getFromSuffix(suffix)
     }
 
     /**
@@ -758,7 +757,7 @@ data class YouTubeVideoInfo(
 
 data class VideoStreamInfo(
     val url: String,
-    val format: MediaFormat?,
+    val format: String?,
     val resolution: String?,
     val quality: String?,
     val fileSize: Long,
@@ -768,7 +767,7 @@ data class VideoStreamInfo(
 
 data class AudioStreamInfo(
     val url: String,
-    val format: MediaFormat?,
+    val format: String?,
     val quality: String,
     val bitrate: Int,
     val fileSize: Long
@@ -817,9 +816,7 @@ class DownloaderImpl private constructor() : org.schabi.newpipe.extractor.downlo
             .addHeader("X-Android-Package", "com.google.android.youtube")
             .addHeader("X-Android-Cert", "2FAB0E6B83A5F246F6ACC2E590E5C5892777B3FC")
             .addHeader("Accept-Language", "en-US,en;q=0.8")
-            .method(request.httpMethod(), request.body()?.let { b ->
-                b.toRequestBody("application/json; charset=UTF-8".toMediaType())
-            })
+            .method(request.httpMethod(), null)
             .build()
 
         val httpResponse = client.newCall(httpRequest).execute()
