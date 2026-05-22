@@ -29,6 +29,8 @@
 # Fix missing java.beans (Rhino/Jsoup transitive dependency)
 -dontwarn java.beans.**
 -dontwarn org.mozilla.javascript.**
+-dontwarn org.jspecify.annotations.**
+-dontwarn javax.annotation.**
 
 # Keep Media3/ExoPlayer
 -keep class androidx.media3.** { *; }
