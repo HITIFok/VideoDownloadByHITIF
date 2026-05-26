@@ -162,7 +162,7 @@ class WebDownloadFragment : Fragment() {
                 // FIX: Reload the actual page instead of loading about:blank
                 // Sibnet and other embedded players can cause render process crashes
                 val currentUrl = view?.url
-                android.util.Log.e("WebDownloadFragment", "Render process gone! didCrash=${detail?.didCrash}, reloading: $currentUrl")
+                android.util.Log.e("WebDownloadFragment", "Render process gone! didCrash=${detail?.didCrash()}, reloading: $currentUrl")
                 if (currentUrl != null && currentUrl != "about:blank") {
                     // Small delay to let the system clean up
                     view.postDelayed({ view?.loadUrl(currentUrl) }, 500)
