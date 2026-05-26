@@ -2,13 +2,15 @@ package com.hitif.videodownload.player
 
 import android.net.Uri
 import android.os.Bundle
-import android.view.ViewGroup
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.hitif.videodownload.databinding.ActivityPlayerBinding
 
 class PlayerActivity : AppCompatActivity() {
@@ -35,7 +37,24 @@ class PlayerActivity : AppCompatActivity() {
         val filePath = intent.getStringExtra(EXTRA_FILE_PATH)
         val url = intent.getStringExtra(EXTRA_URL)
         val source = if (filePath != null) {
-            Uri.fromFile(java.io.File(filePath))
+            // Use FileProvider-compatible Uri (fixes crash on API 35+)
+            // Uri.fromFile() is deprecated and throws FileUriExposedException
+            try {
+                val file = java.io.File(filePath)
+                if (file.exists()) {
+                    androidx.core.content.FileProvider.getUriForFile(
+                        this,
+                        "${packageName}.provider",
+                        file
+                    )
+                } else {
+                    // Fallback to content URI
+                    Uri.parse("file://$filePath")
+                }
+            } catch (e: Exception) {
+                // FileProvider not configured for this path — use content URI
+                Uri.parse("file://$filePath")
+            }
         } else if (url != null) {
             Uri.parse(url)
         } else {
@@ -47,7 +66,18 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun initializePlayer(uri: Uri) {
-        player = ExoPlayer.Builder(this).build().apply {
+        // Build a custom HttpDataSource with extended timeout for slow servers
+        val dataSourceFactory = DefaultHttpDataSource.Factory()
+            .setConnectTimeoutMs(15000)
+            .setReadTimeoutMs(15000)
+            .setAllowCrossProtocolRedirects(true)
+            .setUserAgent("Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 Chrome/125.0.0.0 Mobile Safari/537.36")
+
+        player = ExoPlayer.Builder(this)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+            .build()
+
+        player?.apply {
             val mediaItem = MediaItem.fromUri(uri)
             setMediaItem(mediaItem)
             prepare()
@@ -55,7 +85,16 @@ class PlayerActivity : AppCompatActivity() {
 
             addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
-                    Toast.makeText(this@PlayerActivity, "Playback error: ${error.message}", Toast.LENGTH_SHORT).show()
+                    val message = when (error.errorCode) {
+                        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+                        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
+                            "Network error - Check your connection"
+                        PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
+                        PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED ->
+                            "Unsupported format"
+                        else -> "Playback error: ${error.message}"
+                    }
+                    Toast.makeText(this@PlayerActivity, message, Toast.LENGTH_LONG).show()
                 }
             })
         }

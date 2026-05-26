@@ -6,6 +6,8 @@ import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
+import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -13,6 +15,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -35,6 +38,12 @@ class WebDownloadFragment : Fragment() {
     private var lastKnownUrl: String = ""
     private val urlPollingHandler = Handler(Looper.getMainLooper())
     private var isUserTypingUrl = false
+
+    // ===== Fullscreen video handling (fixes Sibnet / embedded player crash) =====
+    private var customView: View? = null
+    private var customViewCallback: WebChromeClient.CustomViewCallback? = null
+    private var originalSystemUiVisibility: Int = 0
+    private var originalOrientation: Int = 0
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentWebBinding.inflate(inflater, container, false)
@@ -65,17 +74,34 @@ class WebDownloadFragment : Fragment() {
             cacheMode = WebSettings.LOAD_DEFAULT
             databaseEnabled = true
             mediaPlaybackRequiresUserGesture = false
+            // Enable hardware acceleration for video playback (Sibnet, etc.)
+            @Suppress("DEPRECATION")
+            setRenderSmooth(true)
         }
+
+        // Ensure hardware layer for video rendering
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
 
         // Add JavaScript interface for SPA URL change detection
         webView.addJavascriptInterface(SpaUrlBridge(), "SpaUrlBridge")
 
-        // Single unified WebViewClient (fixes the double-setWebViewClient bug)
+        // Single unified WebViewClient
         webView.webViewClient = object : WebViewClient() {
 
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val url = request.url.toString()
-                if (WebVideoExtractor.isDirectMediaUrl(url)) {
+                // Only intercept direct media URLs that are NOT from embedded players
+                // Sibnet and similar embeds must be allowed to load their own URLs
+                val host = request.url.host ?: ""
+                val isEmbeddedPlayer = host.contains("sibnet") ||
+                    host.contains("vk.com") ||
+                    host.contains("coub.com") ||
+                    host.contains("dailymotion") ||
+                    host.contains("youtube") ||
+                    host.contains("vimeo") ||
+                    host.contains("ok.ru")
+
+                if (!isEmbeddedPlayer && WebVideoExtractor.isDirectMediaUrl(url)) {
                     showDownloadDialog(url)
                     return true
                 }
@@ -91,7 +117,6 @@ class WebDownloadFragment : Fragment() {
                     binding.urlBar.setText(finalUrl)
                 }
                 videoUrls.clear()
-                // Stop URL polling during page load to avoid stale readings
                 urlPollingHandler.removeCallbacks(urlPollingRunnable)
             }
 
@@ -104,22 +129,46 @@ class WebDownloadFragment : Fragment() {
                 if (!isUserTypingUrl) {
                     binding.urlBar.setText(finalUrl)
                 }
-                // Inject SPA URL monitoring script after every page load
                 injectSpaUrlMonitor(view)
-                // Start URL polling as fallback for sites that don't use pushState
                 startUrlPolling()
             }
 
             override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
                 val url = request?.url?.toString() ?: return null
-                if (WebVideoExtractor.isDirectMediaUrl(url) && url.contains("video")) {
+                // Only capture actual video files, not player pages or segments
+                if (WebVideoExtractor.isDirectMediaUrl(url) &&
+                    url.contains("video") &&
+                    !url.contains("sibnet") &&
+                    !url.contains("vk.com") &&
+                    !url.contains("player")) {
                     videoUrls.add(url)
                     updateVideoCountBadge()
                 }
                 return super.shouldInterceptRequest(view, request)
             }
+
+            override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: android.webkit.WebResourceError?) {
+                super.onReceivedError(view, request, error)
+                // Log error but don't crash — many sites have minor resource errors
+                if (request?.isForMainFrame == true) {
+                    android.util.Log.w("WebDownloadFragment", "Main frame error: ${error?.description}")
+                }
+            }
+
+            override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: android.webkit.WebResourceResponse?) {
+                super.onReceivedHttpError(view, request, errorResponse)
+                // Don't crash on HTTP errors — common for tracking pixels, ads, etc.
+            }
+
+            override fun onRenderProcessGone(view: WebView?, detail: android.webkit.RenderProcessGoneDetail?): Boolean {
+                // The WebView render process crashed — reload instead of crashing the app
+                android.util.Log.e("WebDownloadFragment", "Render process gone, reloading...")
+                view?.loadUrl("about:blank")
+                return true // Return true to suppress the crash
+            }
         }
 
+        // WebChromeClient with proper fullscreen video handling (Sibnet fix)
         webView.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 binding.progressBar.progress = newProgress
@@ -128,13 +177,88 @@ class WebDownloadFragment : Fragment() {
                 }
             }
 
+            /**
+             * Called when the page requests fullscreen video (e.g., Sibnet player).
+             * We MUST attach the custom view to the window — calling super crashes
+             * or does nothing because there's no default container.
+             */
             override fun onShowCustomView(view: View?, callback: WebChromeClient.CustomViewCallback?) {
-                // Fullscreen video
-                super.onShowCustomView(view, callback)
+                if (customView != null) {
+                    // Already in fullscreen — hide previous first
+                    onHideCustomView()
+                }
+
+                if (view == null || callback == null) return
+
+                customView = view
+                customViewCallback = callback
+
+                // Save original state
+                originalSystemUiVisibility = activity?.window?.decorView?.systemUiVisibility ?: 0
+                originalOrientation = activity?.requestedOrientation ?: 0
+
+                // Hide system bars for immersive fullscreen
+                activity?.window?.apply {
+                    setFlags(
+                        WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                        WindowManager.LayoutParams.FLAG_FULLSCREEN
+                    )
+                    decorView?.systemUiVisibility = (
+                        View.SYSTEM_UI_FLAG_FULLSCREEN
+                                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                                or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                                or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    )
+                }
+                activity?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+
+                // Add the video view on top of everything
+                val parent = customView?.parent as? ViewGroup
+                parent?.removeView(customView)
+
+                val decorView = activity?.window?.decorView as? FrameLayout ?: return
+                val layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+                decorView.addView(customView, layoutParams)
             }
 
+            /**
+             * Called when fullscreen video should be dismissed.
+             */
             override fun onHideCustomView() {
-                super.onHideCustomView()
+                if (customView == null) return
+
+                // Remove the custom view from the window
+                val decorView = activity?.window?.decorView as? FrameLayout
+                decorView?.removeView(customView)
+
+                // Clear fullscreen flags
+                activity?.window?.apply {
+                    clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+                    decorView?.systemUiVisibility = originalSystemUiVisibility
+                }
+                activity?.requestedOrientation = originalOrientation
+
+                // Notify the page we exited fullscreen
+                customViewCallback?.onCustomViewHidden()
+
+                customView = null
+                customViewCallback = null
+            }
+
+            /** Console logging — prevents JS errors from causing silent crashes */
+            override fun onConsoleMessage(message: ConsoleMessage?): Boolean {
+                if (message?.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
+                    android.util.Log.w(
+                        "WebViewJS",
+                        "${message?.sourceId()}:${message?.lineNumber()} - ${message?.message()}"
+                    )
+                }
+                return true
             }
         }
 
@@ -143,10 +267,7 @@ class WebDownloadFragment : Fragment() {
     }
 
     /**
-     * JavaScript bridge that receives URL change notifications from the
-     * injected SPA monitoring script. YouTube (and many other SPAs) use
-     * history.pushState / replaceState to navigate without a full page reload,
-     * so onPageStarted / onPageFinished are never called.
+     * JavaScript bridge for SPA URL change detection
      */
     private inner class SpaUrlBridge {
         @JavascriptInterface
@@ -162,26 +283,11 @@ class WebDownloadFragment : Fragment() {
         }
     }
 
-    /**
-     * Injects JavaScript that overrides history.pushState and
-     * history.replaceState so every SPA navigation notifies our
-     * native bridge. Also listens for the popstate event (back/forward).
-     */
     private fun injectSpaUrlMonitor(webView: WebView?) {
         webView?.evaluateJavascript(URL_MONITOR_JS, null)
     }
 
     companion object {
-        /**
-         * Self-invoking JS that:
-         * 1. Wraps the native pushState / replaceState to fire our bridge after each call
-         * 2. Listens on popstate (browser back / forward)
-         * 3. Also uses a MutationObserver on <title> as an additional signal
-         * 4. Monitors document.title changes via a periodic interval
-         *
-         * The script is idempotent: the override wrappers are installed only once
-         * per page lifetime.
-         */
         private val URL_MONITOR_JS = """
         (function() {
             if (window.__spaUrlMonitorInstalled) return;
@@ -196,7 +302,6 @@ class WebDownloadFragment : Fragment() {
                 } catch(e) {}
             }
 
-            // Override pushState
             var origPushState = history.pushState;
             history.pushState = function() {
                 var result = origPushState.apply(this, arguments);
@@ -204,7 +309,6 @@ class WebDownloadFragment : Fragment() {
                 return result;
             };
 
-            // Override replaceState
             var origReplaceState = history.replaceState;
             history.replaceState = function() {
                 var result = origReplaceState.apply(this, arguments);
@@ -212,24 +316,22 @@ class WebDownloadFragment : Fragment() {
                 return result;
             };
 
-            // Listen for popstate (back / forward)
             window.addEventListener('popstate', function() {
                 setTimeout(notifyNative, 100);
             });
 
-            // YouTube specifically updates the DOM without always calling pushState
-            // Watch for title changes as a signal
             var lastTitle = document.title;
             var titleObserver = new MutationObserver(function() {
                 if (document.title !== lastTitle) {
                     lastTitle = document.title;
-                    // Small delay to let the URL update settle
                     setTimeout(notifyNative, 150);
                 }
             });
-            titleObserver.observe(document.querySelector('title'), { childList: true, subtree: true, characterData: true });
+            var titleEl = document.querySelector('title');
+            if (titleEl) {
+                titleObserver.observe(titleEl, { childList: true, subtree: true, characterData: true });
+            }
 
-            // Periodic check as a last resort (every 800ms)
             setInterval(function() {
                 try {
                     var currentUrl = window.location.href;
@@ -240,19 +342,16 @@ class WebDownloadFragment : Fragment() {
                 } catch(e) {}
             }, 800);
 
-            // Set initial URL
             window.__lastSpaUrl = window.location.href;
         })();
         """.trimIndent()
     }
 
-    // Periodic polling from native side as an extra safety net
     private val urlPollingRunnable = object : Runnable {
         override fun run() {
             try {
                 val webView = binding.webView
                 webView.evaluateJavascript("(function(){try{return window.location.href;}catch(e){return '';}})()") { result ->
-                    // result comes wrapped in quotes, e.g. "https://youtube.com/watch?v=..."
                     val cleanedUrl = result?.trim('"') ?: ""
                     if (cleanedUrl.isNotBlank() && cleanedUrl != lastKnownUrl && !isUserTypingUrl) {
                         lastKnownUrl = cleanedUrl
@@ -260,7 +359,6 @@ class WebDownloadFragment : Fragment() {
                     }
                 }
             } catch (_: Exception) {}
-            // Poll every 1 second
             urlPollingHandler.postDelayed(this, 1000)
         }
     }
@@ -283,7 +381,6 @@ class WebDownloadFragment : Fragment() {
                     showVideoSelectionDialog()
                 }
             } else {
-                // Try to extract from current URL
                 val currentUrl = binding.webView.url
                 if (currentUrl != null) {
                     lifecycleScope.launch {
@@ -303,7 +400,6 @@ class WebDownloadFragment : Fragment() {
         }
 
         binding.btnSeason.setOnClickListener {
-            // Check if we can extract a season/playlist
             val currentUrl = binding.webView.url
             if (currentUrl != null) {
                 val site = WebVideoExtractor.detectSite(currentUrl)
@@ -334,12 +430,10 @@ class WebDownloadFragment : Fragment() {
             }
         }
 
-        // Track when user is manually editing the URL bar so we don't overwrite it
         binding.urlBar.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus) {
                 isUserTypingUrl = true
             } else {
-                // Small delay so the Go button / Enter action can set isUserTypingUrl = false first
                 binding.urlBar.postDelayed({ isUserTypingUrl = false }, 300)
             }
         }
@@ -431,8 +525,25 @@ class WebDownloadFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        // Exit fullscreen if still active
+        if (customView != null) {
+            try { onHideCustomView() } catch (_: Exception) {}
+        }
         stopUrlPolling()
         _binding = null
         super.onDestroyView()
+    }
+
+    override fun onDetach() {
+        // Safety: clean up fullscreen state when fragment is detached
+        if (customView != null) {
+            try {
+                (customView?.parent as? ViewGroup)?.removeView(customView)
+                customViewCallback?.onCustomViewHidden()
+            } catch (_: Exception) {}
+            customView = null
+            customViewCallback = null
+        }
+        super.onDetach()
     }
 }
