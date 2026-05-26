@@ -159,9 +159,16 @@ class WebDownloadFragment : Fragment() {
             }
 
             override fun onRenderProcessGone(view: WebView?, detail: android.webkit.RenderProcessGoneDetail?): Boolean {
-                // The WebView render process crashed — reload instead of crashing the app
-                android.util.Log.e("WebDownloadFragment", "Render process gone, reloading...")
-                view?.loadUrl("about:blank")
+                // FIX: Reload the actual page instead of loading about:blank
+                // Sibnet and other embedded players can cause render process crashes
+                val currentUrl = view?.url
+                android.util.Log.e("WebDownloadFragment", "Render process gone! didCrash=${detail?.didCrash}, reloading: $currentUrl")
+                if (currentUrl != null && currentUrl != "about:blank") {
+                    // Small delay to let the system clean up
+                    view.postDelayed({ view?.loadUrl(currentUrl) }, 500)
+                } else {
+                    view?.loadUrl("about:blank")
+                }
                 return true // Return true to suppress the crash
             }
         }

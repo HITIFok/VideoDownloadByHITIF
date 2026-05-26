@@ -59,12 +59,12 @@ class DownloadManager private constructor(private val context: Context) {
             }
         }
 
-        // VidMate's default timeout: 8 seconds
-        private const val CONN_TIMEOUT = 8
-        private const val READ_TIMEOUT = 8
+        // Increased timeouts — 8 seconds was too short for video downloads
+        private const val CONN_TIMEOUT = 30
+        private const val READ_TIMEOUT = 60
 
-        // VidMate's default retry delay on 403: 1001ms
-        private const val RETRY_DELAY_403 = 1001L
+        // Retry delay on 403: 2 seconds (increased from 1001ms for stability)
+        private const val RETRY_DELAY_403 = 2000L
 
         // VidMate's max retry count
         private const val MAX_RETRY_403 = 5
@@ -190,15 +190,17 @@ class DownloadManager private constructor(private val context: Context) {
                 val outputFile = File(outputDir, entity.fileName)
                 val tempFile = File(outputDir, "${entity.fileName}.tmp")
 
-                // Build OkHttp request with VidMate-style headers
-                val requestBuilder = Request.Builder().url(entity.url)
-
-                // Add headers based on download source
-                addDownloadHeaders(requestBuilder, entity)
-
                 // Resume support
                 val existingBytes = if (tempFile.exists() && entity.status == DownloadStatus.PAUSED) tempFile.length() else 0L
-                if (existingBytes > 0) {
+                val hasResume = existingBytes > 0
+
+                // Build OkHttp request with proper headers
+                val requestBuilder = Request.Builder().url(entity.url)
+
+                // Add headers based on download source (pass hasResume for proper Range handling)
+                addDownloadHeaders(requestBuilder, entity, hasResume)
+
+                if (hasResume) {
                     requestBuilder.addHeader("Range", "bytes=$existingBytes-")
                 }
 
@@ -213,10 +215,26 @@ class DownloadManager private constructor(private val context: Context) {
 
                         downloadToFile(responseBody.byteStream(), entity, dao, tempFile, startBytes, totalBytes, notificationHelper)
 
-                        if (tempFile.exists()) tempFile.renameTo(outputFile)
+                        // FIX: Ensure temp file is fully flushed before rename
+                        if (tempFile.exists()) {
+                            // Atomic move — if renameTo fails (cross-filesystem), copy instead
+                            if (!tempFile.renameTo(outputFile)) {
+                                tempFile.copyTo(outputFile, overwrite = true)
+                                tempFile.delete()
+                            }
+                        }
 
-                        dao.updateCompleted(entity.id, DownloadStatus.COMPLETED, System.currentTimeMillis(),
-                            outputFile.absolutePath, outputFile.length())
+                        if (outputFile.exists() && outputFile.length() > 0) {
+                            dao.updateCompleted(entity.id, DownloadStatus.COMPLETED, System.currentTimeMillis(),
+                                outputFile.absolutePath, outputFile.length())
+                        } else {
+                            // FIX: Detect 0-byte / empty files and mark as failed
+                            val errorMsg = "Downloaded file is empty (0 bytes)"
+                            Log.e(TAG, "$errorMsg for ${entity.fileName}")
+                            dao.updateFailed(entity.id, DownloadStatus.FAILED, errorMsg)
+                            notificationHelper.showDownloadError(entity, errorMsg)
+                            return@withContext
+                        }
                         notificationHelper.showDownloadComplete(entity.copy(
                             filePath = outputFile.absolutePath, totalBytes = outputFile.length()))
                     }
@@ -254,27 +272,24 @@ class DownloadManager private constructor(private val context: Context) {
     /**
      * Add VidMate-style download headers
      */
-    private fun addDownloadHeaders(builder: Request.Builder, entity: DownloadEntity) {
+    private fun addDownloadHeaders(builder: Request.Builder, entity: DownloadEntity, hasResume: Boolean = false) {
         builder.apply {
-            // VidMate uses Android YouTube app UA for YouTube downloads
+            // Use a real desktop Chrome UA — the YouTube app UA triggers bot detection
             header("User-Agent", getSmartUserAgent(entity.source))
             header("Accept", "*/*")
             header("Connection", "keep-alive")
 
-            // YouTube-specific headers (from VidMate jG.java and aasS config)
+            // YouTube-specific headers
             if (entity.source == DownloadSource.YOUTUBE || entity.url.contains("googlevideo.com")) {
                 header("Referer", "https://www.youtube.com/")
                 header("Origin", "https://www.youtube.com")
-                header("X-Android-Package", "com.google.android.youtube")
-                header("X-Android-Cert", "2FAB0E6B83A5F246F6ACC2E590E5C5892777B3FC")
-                // VidMate disables Accept-Encoding for Range requests
-                if (!entity.url.contains("range")) {
-                    header("Accept-Encoding", "identity")
-                }
             }
 
-            // Gzip disabled for Range requests (VidMate technique)
-            if (builder.build().header("Range") != null) {
+            // FIX: Disable Accept-Encoding for Range requests (gzip breaks resume)
+            // The old code checked builder.build().header("Range") which is wrong —
+            // it builds a request without the Range header we're about to add.
+            // Instead, use the hasResume parameter.
+            if (hasResume) {
                 header("Accept-Encoding", "identity")
             }
         }
@@ -285,19 +300,21 @@ class DownloadManager private constructor(private val context: Context) {
      * VidMate rotates between different UAs based on source
      */
     private fun getSmartUserAgent(source: DownloadSource): String {
+        // Use real Chrome desktop UA for all sources — YouTube app UA triggers bot detection
         return when (source) {
             DownloadSource.YOUTUBE -> {
-                // Use Android YouTube app UA (VidMate primary choice)
-                val versions = listOf("19.29.37", "19.25.37", "18.48.37", "18.38.37")
-                "com.google.android.youtube/${versions[Random().nextInt(versions.size)]} (Linux; U; Android 14) gzip"
+                val uas = listOf(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                    "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
+                )
+                uas[Random().nextInt(uas.size)]
             }
             else -> {
-                // Random desktop Chrome/FF UA for other sources
                 val uas = listOf(
-                    "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:68.0) Gecko/20100101 Firefox/68.0",
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/125.0.0.0 Safari/537.36",
-                    "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 Chrome/125.0.0.0 Mobile Safari/537.36"
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
+                    "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 Chrome/131.0.0.0 Mobile Safari/537.36"
                 )
                 uas[Random().nextInt(uas.size)]
             }

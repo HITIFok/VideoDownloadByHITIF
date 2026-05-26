@@ -121,9 +121,14 @@ class YouTubeFragment : Fragment() {
                     showError(getString(R.string.extraction_failed))
                 }
             } catch (e: YouTubeExtractionException) {
-                showError(e.message ?: getString(R.string.extraction_failed))
+                // Show detailed error message for easier debugging
+                val errorMsg = e.message ?: getString(R.string.extraction_failed)
+                android.util.Log.e("YouTubeFragment", "Extraction failed for $url: $errorMsg", e)
+                showError(errorMsg)
             } catch (e: Exception) {
-                showError(getString(R.string.extraction_failed) + ": ${e.message}")
+                val errorMsg = "${getString(R.string.extraction_failed)}: ${e.message}"
+                android.util.Log.e("YouTubeFragment", "Unexpected error for $url", e)
+                showError(errorMsg)
             } finally {
                 isExtracting = false
                 binding.shimmerLayout.stopShimmer()

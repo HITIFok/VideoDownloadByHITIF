@@ -126,8 +126,8 @@ dependencies {
     // JSON parsing
     implementation 'com.google.code.gson:gson:2.11.0'
 
-    // NewPipe Extractor - YouTube extraction
-    implementation 'com.github.TeamNewPipe:NewPipeExtractor:v0.24.3'
+    // NewPipe Extractor - YouTube extraction (v0.26.2 has critical YouTube bot protection fixes)
+    implementation 'com.github.TeamNewPipe:NewPipeExtractor:v0.26.2'
 
     // Jsoup - HTML parsing for web video extraction
     implementation 'org.jsoup:jsoup:1.18.1'
