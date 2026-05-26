@@ -75,8 +75,6 @@ class WebDownloadFragment : Fragment() {
             databaseEnabled = true
             mediaPlaybackRequiresUserGesture = false
             // Enable hardware acceleration for video playback (Sibnet, etc.)
-            @Suppress("DEPRECATION")
-            setRenderSmooth(true)
         }
 
         // Ensure hardware layer for video rendering
@@ -184,8 +182,8 @@ class WebDownloadFragment : Fragment() {
              */
             override fun onShowCustomView(view: View?, callback: WebChromeClient.CustomViewCallback?) {
                 if (customView != null) {
-                    // Already in fullscreen — hide previous first
-                    onHideCustomView()
+                    // Already in fullscreen — exit first
+                    exitFullscreenVideo()
                 }
 
                 if (view == null || callback == null) return
@@ -524,11 +522,25 @@ class WebDownloadFragment : Fragment() {
         binding.videoCountBadge.visibility = if (videoUrls.isNotEmpty()) View.VISIBLE else View.GONE
     }
 
+    /** Helper to safely exit fullscreen video from anywhere in the fragment */
+    private fun exitFullscreenVideo() {
+        if (customView == null) return
+        try {
+            val decorView = activity?.window?.decorView as? FrameLayout
+            decorView?.removeView(customView)
+            activity?.window?.apply {
+                clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+                decorView?.systemUiVisibility = originalSystemUiVisibility
+            }
+            activity?.requestedOrientation = originalOrientation
+            customViewCallback?.onCustomViewHidden()
+        } catch (_: Exception) {}
+        customView = null
+        customViewCallback = null
+    }
+
     override fun onDestroyView() {
-        // Exit fullscreen if still active
-        if (customView != null) {
-            try { onHideCustomView() } catch (_: Exception) {}
-        }
+        exitFullscreenVideo()
         stopUrlPolling()
         _binding = null
         super.onDestroyView()
